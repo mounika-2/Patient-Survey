@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Summary</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<div class="container">
+  <h2>Thank you, {{.PatientFirstName}}</h2>
+  <p><strong>Doctor:</strong> {{.DoctorName}}</p>
+  <p><strong>Diagnosis:</strong> {{.Diagnosis}}</p>
+  <p><strong>Rating:</strong> {{.Rating}}</p>
+  <p><strong>Explanation clear:</strong> {{.ExplanationClear}}</p>
+  <p><strong>Feelings:</strong> {{.Feelings}}</p>
+  <a href="/">Submit another feedback</a>
+  <a href="/logout">Logout</a>
+</div>
+</body>
+</html>

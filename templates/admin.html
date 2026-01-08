@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Admin Feedback</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<div class="container">
+  <h2>All Feedback</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>User</th>
+        <th>Doctor</th>
+        <th>Rating</th>
+        <th>Explanation</th>
+        <th>Feelings</th>
+      </tr>
+    </thead>
+    <tbody>
+      {{range .}}
+      <tr>
+        <td>{{.Username}}</td>
+        <td>{{.DoctorName}}</td>
+        <td>{{.Rating}}</td>
+        <td>{{.ExplanationClear}}</td>
+        <td>{{.Feelings}}</td>
+      </tr>
+      {{end}}
+    </tbody>
+  </table>
+  <a href="/logout">Logout</a>
+</div>
+</body>
+</html>
