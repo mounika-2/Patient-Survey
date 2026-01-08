@@ -2,19 +2,28 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Summary</title>
+<title>Feedback Summary</title>
 <link rel="stylesheet" href="/static/style.css">
+<style>
+.container { max-width: 700px; margin: 40px auto; padding: 30px; background:#fff; border-radius:8px; box-shadow:0 4px 12px rgba(0,0,0,0.1);}
+h2 { color:#2c3e50; }
+p { font-size:16px; margin:12px 0; }
+</style>
 </head>
 <body>
 <div class="container">
-  <h2>Thank you, {{.PatientFirstName}}</h2>
-  <p><strong>Doctor:</strong> {{.DoctorName}}</p>
-  <p><strong>Diagnosis:</strong> {{.Diagnosis}}</p>
-  <p><strong>Rating:</strong> {{.Rating}}</p>
-  <p><strong>Explanation clear:</strong> {{.ExplanationClear}}</p>
-  <p><strong>Feelings:</strong> {{.Feelings}}</p>
-  <a href="/">Submit another feedback</a>
-  <a href="/logout">Logout</a>
+  <h2>Thanks again, {{.PatientFirstName}}!</h2>
+
+  <p><strong>Recommendation:</strong> On a scale of 1–10, you rated Dr {{.DoctorName}}: <strong>{{.Rating}}</strong></p>
+
+  <p><strong>Explanation clarity:</strong> Dr {{.DoctorName}} explained your diagnosis ({{.Diagnosis}}) in a way you could understand: <strong>{{.ExplanationClear}}</strong></p>
+
+  <p><strong>Feelings:</strong> You shared how you feel about being diagnosed with {{.Diagnosis}}:</p>
+  <blockquote>{{.Feelings}}</blockquote>
+
+  <p><strong>Summary:</strong> We heard that you would give Dr {{.DoctorName}} a {{.Rating}}/10 recommendation, found the explanation "{{.ExplanationClear}}", and shared your feelings about your diagnosis. Thank you for taking the time to give feedback!</p>
+
+  <a href="/">Submit another feedback</a> | <a href="/logout">Logout</a>
 </div>
 </body>
 </html>

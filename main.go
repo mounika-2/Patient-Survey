@@ -8,6 +8,7 @@ import (
 	"html/template"
 	"net/http"
 	"strconv"
+	"strings"
 
 	_ "github.com/mattn/go-sqlite3"
 )
@@ -101,7 +102,10 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 
 	user, ok := users[username]
 	if !ok || user.Password != password {
-		http.Error(w, "Invalid credentials", http.StatusUnauthorized)
+		// Instead of http.Error, render login template with error
+		loginTmpl.Execute(w, struct{ Error string }{
+			Error: "Login username and password do not match, try again",
+		})
 		return
 	}
 
@@ -169,13 +173,17 @@ func submitForm(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Validate feelings
-	feelings := r.FormValue("feelings")
+	feelings := strings.TrimSpace(r.FormValue("feelings"))
 	if len(feelings) == 0 || len(feelings) > 500 {
 		http.Error(w, "Please describe your feelings (1-500 characters)", http.StatusBadRequest)
 		return
 	}
 
-	doctor := "Smith" // Can later be dynamic
+	doctor := strings.TrimSpace(r.FormValue("doctor"))
+	if doctor == "" {
+		http.Error(w, "Doctor must be selected", http.StatusBadRequest)
+		return
+	}
 
 	// Insert feedback
 	_, err = db.Exec(
@@ -265,7 +273,23 @@ func adminFeedback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	rows, err := db.Query("SELECT username, doctor_name, rating, explanation_clear, feelings FROM feedback ORDER BY created_at DESC")
+	// Get doctor filter
+	doctorFilter := strings.TrimSpace(r.URL.Query().Get("doctor"))
+
+	var rows *sql.Rows
+	var err error
+	if doctorFilter != "" {
+		rows, err = db.Query(
+			`SELECT username, doctor_name, rating, explanation_clear, feelings
+			 FROM feedback
+			 WHERE LOWER(doctor_name) = LOWER(?)
+			 ORDER BY created_at DESC`, doctorFilter)
+	} else {
+		rows, err = db.Query(
+			`SELECT username, doctor_name, rating, explanation_clear, feelings
+			 FROM feedback
+			 ORDER BY created_at DESC`)
+	}
 	if err != nil {
 		http.Error(w, "Failed to load feedback", http.StatusInternalServerError)
 		return
@@ -282,7 +306,13 @@ func adminFeedback(w http.ResponseWriter, r *http.Request) {
 		allFeedback = append(allFeedback, f)
 	}
 
-	adminTmpl.Execute(w, allFeedback)
+	adminTmpl.Execute(w, struct {
+		Feedback []Feedback
+		Filter   string
+	}{
+		Feedback: allFeedback,
+		Filter:   doctorFilter,
+	})
 }
 
 // -------------------- Helpers --------------------

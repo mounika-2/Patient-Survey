@@ -1,59 +1,36 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Patient Feedback Form</title>
-    <link rel="stylesheet" href="/static/app.css">
-    <style>
-        body {
-            font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
-            background: #f5f5f5;
-            margin: 0;
-            padding: 0;
-        }
-        .container {
-            max-width: 600px;
-            margin: 40px auto;
-            background: #fff;
-            padding: 30px;
-            border-radius: 8px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-        }
-        h1 { text-align: center; color: #2c3e50; }
-        label { display: block; margin-top: 20px; font-weight: bold; }
-        input, select, textarea {
-            width: 100%;
-            padding: 10px;
-            margin-top: 6px;
-            border-radius: 4px;
-            border: 1px solid #ccc;
-            font-size: 16px;
-        }
-        button {
-            margin-top: 30px;
-            background-color: #007bff;
-            color: #fff;
-            border: none;
-            padding: 12px;
-            border-radius: 4px;
-            font-size: 18px;
-            cursor: pointer;
-            width: 100%;
-        }
-        button:hover { background-color: #0056b3; }
-        .error { color: red; font-size: 14px; }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Patient Feedback</title>
+<link rel="stylesheet" href="/static/app.css">
 </head>
 <body>
 <div class="container">
-    <h1>Patient Feedback Form</h1>
-    <form action="/submit" method="POST" onsubmit="return validateForm()">
-        <label for="rating">Overall Experience (1-10)</label>
-        <input type="number" id="rating" name="rating" min="1" max="10" required
-               placeholder="Enter a rating from 1 to 10">
+    <h1>Patient Feedback</h1>
 
-        <label for="explanation">Was the explanation clear?</label>
+    <form action="/submit" method="POST" onsubmit="return validateForm()">
+
+        <!-- Doctor Selection -->
+        <label for="doctor">Which doctor did you see?</label>
+        <select id="doctor" name="doctor" required>
+            <option value="">Select a doctor...</option>
+            <option value="Smith">Dr Smith</option>
+            <option value="Johnson">Dr Johnson</option>
+            <option value="Lee">Dr Lee</option>
+        </select>
+
+        <!-- Question 1 -->
+        <label for="rating">
+            Hi {{.Username}}, on a scale of 1–10, would you recommend Dr <span id="doctorName">___</span> to a friend or family member?
+        </label>
+        <input type="number" id="rating" name="rating" min="1" max="10" required>
+
+        <!-- Question 2 -->
+        <label for="explanation">
+            Thank you. You were diagnosed with Asthma. Did Dr <span class="doctorName">___</span> explain how to manage this diagnosis in a way you could understand?
+        </label>
         <select id="explanation" name="explanation" required>
             <option value="">Select...</option>
             <option value="yes">Yes</option>
@@ -61,14 +38,26 @@
             <option value="mixed">Mixed / Unclear</option>
         </select>
 
-        <label for="feelings">How are you feeling?</label>
-        <textarea id="feelings" name="feelings" rows="4" placeholder="Describe your feelings..." required></textarea>
+        <!-- Question 3 -->
+        <label for="feelings">
+            We appreciate the feedback. One last question: how do you feel about being diagnosed with Asthma?
+        </label>
+        <textarea id="feelings" name="feelings" rows="4" required></textarea>
 
         <button type="submit">Submit Feedback</button>
     </form>
 </div>
 
 <script>
+const doctorSelect = document.getElementById("doctor");
+const doctorNameSpans = document.querySelectorAll("#doctorName, .doctorName");
+
+doctorSelect.addEventListener("change", () => {
+    doctorNameSpans.forEach(span => {
+        span.textContent = doctorSelect.value || "___";
+    });
+});
+
 function validateForm() {
     const rating = document.getElementById('rating').value;
     const feelings = document.getElementById('feelings').value.trim();
@@ -77,12 +66,10 @@ function validateForm() {
         alert("Rating must be between 1 and 10");
         return false;
     }
-
     if (!feelings) {
         alert("Please describe your feelings");
         return false;
     }
-
     return true;
 }
 </script>
