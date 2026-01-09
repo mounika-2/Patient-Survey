@@ -117,12 +117,24 @@ tbody td {
 <div class="container">
   <h2>All Feedback</h2>
 
-  <!-- Filter Form -->
-  <form method="GET" action="/admin/feedback">
-    <input type="text" id="doctor" name="doctor" value="{{.Filter}}" placeholder="Filter by doctor name">
-    <button type="submit">Filter</button>
-    <a href="/admin/feedback">Clear Filter</a>
-  </form>
+
+<!-- Filter Form -->
+<form method="GET" action="/admin/feedback" style="display:flex; align-items:center; gap:10px; flex-wrap:nowrap;">
+  <input 
+    type="text" 
+    id="doctor" 
+    name="doctor" 
+    value="{{.Filter}}" 
+    placeholder="Filter by doctor name"
+    style="flex:1; min-width:250px; padding:8px 12px; font-size:16px; border-radius:6px; border:1px solid #ccc;"
+  >
+  <button type="submit" style="padding:8px 20px; font-size:16px; border-radius:6px; background-color:#3498db; color:white; border:none; cursor:pointer;">
+    Filter
+  </button>
+  <a href="/admin/feedback" style="text-decoration:none; color:#e74c3c; font-weight:bold; padding:8px 0;">
+    Clear Filter
+  </a>
+</form>
 
   <!-- Feedback Table -->
   <table>

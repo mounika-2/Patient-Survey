@@ -4,12 +4,15 @@ import (
 	"crypto/rand"
 	"database/sql"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"html/template"
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
+	"github.com/golang-jwt/jwt/v5"
 	_ "github.com/mattn/go-sqlite3"
 )
 
@@ -37,6 +40,23 @@ type Feedback struct {
 	Feelings         string
 }
 
+type LoginRequest struct {
+	Username string `json:"username"`
+	Password string `json:"password"`
+}
+
+type LoginResponse struct {
+	Token string `json:"token"`
+	Role  string `json:"role"`
+}
+
+type FeedbackRequest struct {
+	Doctor      string `json:"doctor"`
+	Rating      int    `json:"rating"`
+	Explanation string `json:"explanation"`
+	Feelings    string `json:"feelings"`
+}
+
 // -------------------- Globals --------------------
 
 var users = map[string]User{
@@ -53,6 +73,8 @@ var (
 	db       *sql.DB
 	sessions = map[string]string{} // sessionID -> username
 )
+
+var jwtSecret = []byte("super-secret-key-change-me")
 
 // -------------------- Main --------------------
 
@@ -86,6 +108,15 @@ func routes() http.Handler {
 	mux.HandleFunc("/logout", logout)
 	mux.HandleFunc("/admin/feedback", adminFeedback)
 	mux.HandleFunc("/summary", showSummary)
+
+	mux.HandleFunc("/api/login", apiLogin)
+	mux.HandleFunc("/api/feedback", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost {
+			apiSubmitFeedback(w, r)
+		} else if r.Method == http.MethodGet {
+			apiAdminFeedback(w, r)
+		}
+	})
 
 	return mux
 }
@@ -315,6 +346,36 @@ func adminFeedback(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func generateJWT(username, role string) (string, error) {
+	claims := jwt.MapClaims{
+		"username": username,
+		"role":     role,
+		"exp":      time.Now().Add(24 * time.Hour).Unix(),
+	}
+
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	return token.SignedString(jwtSecret)
+}
+
+func parseJWT(r *http.Request) (string, string, error) {
+	auth := r.Header.Get("Authorization")
+	if !strings.HasPrefix(auth, "Bearer ") {
+		return "", "", fmt.Errorf("missing token")
+	}
+
+	tokenStr := strings.TrimPrefix(auth, "Bearer ")
+	token, err := jwt.Parse(tokenStr, func(t *jwt.Token) (interface{}, error) {
+		return jwtSecret, nil
+	})
+
+	if err != nil || !token.Valid {
+		return "", "", fmt.Errorf("invalid token")
+	}
+
+	claims := token.Claims.(jwt.MapClaims)
+	return claims["username"].(string), claims["role"].(string), nil
+}
+
 // -------------------- Helpers --------------------
 
 func getUserFromRequest(r *http.Request) (string, bool) {
@@ -364,4 +425,102 @@ func initDB() error {
 	);`
 	_, err = db.Exec(query)
 	return err
+}
+
+func apiLogin(w http.ResponseWriter, r *http.Request) {
+	var req LoginRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		return
+	}
+
+	user, ok := users[req.Username]
+	if !ok || user.Password != req.Password {
+		http.Error(w, "Invalid credentials", http.StatusUnauthorized)
+		return
+	}
+
+	token, err := generateJWT(req.Username, user.Role)
+	if err != nil {
+		http.Error(w, "Token error", http.StatusInternalServerError)
+		return
+	}
+
+	json.NewEncoder(w).Encode(LoginResponse{
+		Token: token,
+		Role:  user.Role,
+	})
+}
+
+func apiSubmitFeedback(w http.ResponseWriter, r *http.Request) {
+	username, role, err := parseJWT(r)
+	if err != nil || role != "user" {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	var req FeedbackRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		return
+	}
+
+	if req.Rating < 1 || req.Rating > 10 {
+		http.Error(w, "Invalid rating", http.StatusBadRequest)
+		return
+	}
+
+	feelings := strings.TrimSpace(req.Feelings)
+	if len(feelings) == 0 || len(feelings) > 250 {
+		http.Error(w, "Feelings must be 1–250 chars", http.StatusBadRequest)
+		return
+	}
+
+	explanation := normalizeYesNo(req.Explanation)
+
+	_, err = db.Exec(
+		`INSERT INTO feedback (username, doctor_name, rating, explanation_clear, feelings)
+		 VALUES (?, ?, ?, ?, ?)`,
+		username,
+		req.Doctor,
+		req.Rating,
+		explanation,
+		feelings,
+	)
+	if err != nil {
+		http.Error(w, "DB error", http.StatusInternalServerError)
+		return
+	}
+
+	json.NewEncoder(w).Encode(map[string]string{
+		"status": "saved",
+	})
+}
+
+func apiAdminFeedback(w http.ResponseWriter, r *http.Request) {
+	_, role, err := parseJWT(r)
+	if err != nil || role != "admin" {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+
+	rows, err := db.Query(`
+		SELECT username, doctor_name, rating, explanation_clear, feelings
+		FROM feedback
+		ORDER BY created_at DESC
+	`)
+	if err != nil {
+		http.Error(w, "DB error", http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	var feedback []Feedback
+	for rows.Next() {
+		var f Feedback
+		rows.Scan(&f.Username, &f.DoctorName, &f.Rating, &f.ExplanationClear, &f.Feelings)
+		feedback = append(feedback, f)
+	}
+
+	json.NewEncoder(w).Encode(feedback)
 }

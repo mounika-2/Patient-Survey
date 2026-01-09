@@ -7,10 +7,19 @@ import (
 	"testing"
 )
 
+// -------------------- Helpers --------------------
+
+// Clear DB table before each test
+func clearDB() {
+	db.Exec("DELETE FROM feedback")
+}
+
 // -------------------- Web Handlers Tests --------------------
 
 func TestWeb_LoginFlow(t *testing.T) {
 	initDB()
+	sessions = map[string]string{} // clear sessions
+	clearDB()
 
 	// GET /login should return 200 OK
 	req := httptest.NewRequest(http.MethodGet, "/login", nil)
@@ -47,13 +56,16 @@ func TestWeb_LoginFlow(t *testing.T) {
 
 func TestWeb_SubmitFormFlow(t *testing.T) {
 	initDB()
+	sessions = map[string]string{}
+	clearDB()
 
 	// Setup session
 	sessionID := createSession("alex")
 	sessions[sessionID] = "alex"
 	cookie := &http.Cookie{Name: "session", Value: sessionID}
 
-	form := strings.NewReader("rating=7&explanation=yes&feelings=good")
+	// POST /submit form
+	form := strings.NewReader("rating=7&explanation=yes&feelings=good&doctor=Dr. Smith")
 	req := httptest.NewRequest(http.MethodPost, "/submit", form)
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.AddCookie(cookie)
@@ -74,6 +86,29 @@ func TestWeb_SubmitFormFlow(t *testing.T) {
 func TestWeb_AdminView(t *testing.T) {
 	initDB()
 
+	// Clear previous test data
+	db.Exec(`DELETE FROM feedback`)
+
+	// Insert multiple realistic feedback entries with only Dr. Johnson, Dr. Lee, Dr. Smith
+	testData := []Feedback{
+		{"alice", "Dr. Smith", 8, "Yes", "Feeling happy"},
+		{"bob", "Dr. Johnson", 6, "No", "Feeling okay"},
+		{"carol", "Dr. Lee", 9, "Yes", "Feeling great"},
+		{"dave", "Dr. Smith", 5, "Unclear / Mixed", "Feeling unsure"},
+		{"eve", "Dr. Johnson", 7, "Yes", "Feeling good"},
+		{"frank", "Dr. Lee", 10, "Yes", "Feeling excellent"},
+		{"grace", "Dr. Smith", 4, "No", "Feeling bad"},
+		{"heidi", "Dr. Johnson", 6, "Yes", "Feeling fine"},
+		{"ivan", "Dr. Lee", 8, "Yes", "Feeling happy"},
+		{"judy", "Dr. Smith", 7, "No", "Feeling okay"},
+	}
+
+	for _, f := range testData {
+		db.Exec(`INSERT INTO feedback (username, doctor_name, rating, explanation_clear, feelings)
+			VALUES (?, ?, ?, ?, ?)`,
+			f.Username, f.DoctorName, f.Rating, f.ExplanationClear, f.Feelings)
+	}
+
 	// Setup admin session
 	sessionID := createSession("admin")
 	sessions[sessionID] = "admin"
@@ -89,18 +124,32 @@ func TestWeb_AdminView(t *testing.T) {
 		t.Fatalf("expected 200 OK for admin feedback, got %d", w.Result().StatusCode)
 	}
 
-	// Page should include table headers
 	body := w.Body.String()
-	if !strings.Contains(body, "Username") || !strings.Contains(body, "Rating") {
-		t.Fatal("admin page missing expected table headers")
+
+	// Check for the correct table headers
+	headers := []string{"User", "Doctor", "Rating", "Explanation", "Feelings"}
+	for _, h := range headers {
+		if !strings.Contains(body, h) {
+			t.Fatalf("expected header %q in admin page", h)
+		}
+	}
+
+	// Check that all 10 rows are present
+	for _, f := range testData {
+		if !strings.Contains(body, f.Username) {
+			t.Fatalf("expected username %q in admin page", f.Username)
+		}
+		if !strings.Contains(body, f.DoctorName) {
+			t.Fatalf("expected doctor %q in admin page", f.DoctorName)
+		}
 	}
 }
 
 // -------------------- API Tests --------------------
-
-/*func TestAPI_Login(t *testing.T) {
+// (Leave commented out; can enable after JWT testing)
+/*
+func TestAPI_Login(t *testing.T) {
 	initDB()
-
 	payload := `{"username":"alex","password":"password123"}`
 	req := httptest.NewRequest(http.MethodPost, "/api/login", strings.NewReader(payload))
 	req.Header.Set("Content-Type", "application/json")
@@ -112,73 +161,10 @@ func TestWeb_AdminView(t *testing.T) {
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("expected 200 OK, got %d", resp.StatusCode)
 	}
-
-	var body map[string]string
-	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
-		t.Fatalf("failed to decode response: %v", err)
-	}
-
-	if body["status"] != "ok" || body["role"] != "user" {
-		t.Fatal("unexpected response body from /api/login")
-	}
-}*/
-
-/*func TestAPI_Feedback(t *testing.T) {
-	initDB()
-
-	// Setup session
-	sessionID := createSession("alex")
-	sessions[sessionID] = "alex"
-	cookie := &http.Cookie{Name: "session", Value: sessionID}
-
-	// Valid feedback
-	payload := `{"rating":8,"explanation":"yes","feelings":"happy"}`
-	req := httptest.NewRequest(http.MethodPost, "/api/feedback", strings.NewReader(payload))
-	req.Header.Set("Content-Type", "application/json")
-	req.AddCookie(cookie)
-	w := httptest.NewRecorder()
-
-	apiSubmitFeedback(w, req)
-	resp := w.Result()
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("expected 200 OK, got %d", resp.StatusCode)
-	}
-
-	var body map[string]string
-	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
-		t.Fatalf("failed to decode response: %v", err)
-	}
-	if body["status"] != "saved" {
-		t.Fatal("expected status saved in API response")
-	}
-
-	// Invalid rating
-	payload = `{"rating":-1,"explanation":"yes","feelings":"sad"}`
-	req = httptest.NewRequest(http.MethodPost, "/api/feedback", strings.NewReader(payload))
-	req.Header.Set("Content-Type", "application/json")
-	req.AddCookie(cookie)
-	w = httptest.NewRecorder()
-
-	apiSubmitFeedback(w, req)
-	if w.Result().StatusCode != http.StatusBadRequest {
-		t.Fatalf("expected 400 BadRequest for invalid rating, got %d", w.Result().StatusCode)
-	}
-
-	// Unauthorized (no session)
-	payload = `{"rating":5,"explanation":"no","feelings":"meh"}`
-	req = httptest.NewRequest(http.MethodPost, "/api/feedback", strings.NewReader(payload))
-	req.Header.Set("Content-Type", "application/json")
-	w = httptest.NewRecorder()
-
-	apiSubmitFeedback(w, req)
-	if w.Result().StatusCode != http.StatusUnauthorized {
-		t.Fatalf("expected 401 Unauthorized for missing session, got %d", w.Result().StatusCode)
-	}
-}*/
-
-// -------------------- Helpers --------------------
-
-func init() {
-	// Clear sessions map before tests
-	sessions = map[string]string{}
 }
+
+func TestAPI_Feedback(t *testing.T) {
+	initDB()
+	// implement JWT feedback test if needed
+}
+*/
